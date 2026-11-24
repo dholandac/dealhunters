@@ -1,0 +1,266 @@
+{
+  "stores": {
+    "1": "Steam",
+    "2": "GamersGate",
+    "3": "GreenManGaming",
+    "7": "GOG",
+    "11": "Humble Store",
+    "15": "Fanatical",
+    "25": "Epic Games Store",
+    "27": "Gamesplanet"
+  },
+  "games": [
+    {
+      "gameID": "146",
+      "title": "The Witcher 3: Wild Hunt",
+      "cheapest_ever_usd": 3.99,
+      "deals": [
+        {
+          "dealID": "fallback-witcher3-steam",
+          "storeID": "1",
+          "salePrice": 7.99,
+          "normalPrice": 39.99,
+          "savings": 80.02,
+          "metacriticScore": "93"
+        },
+        {
+          "dealID": "fallback-witcher3-gog",
+          "storeID": "7",
+          "salePrice": 9.99,
+          "normalPrice": 39.99,
+          "savings": 75.02,
+          "metacriticScore": "93"
+        }
+      ]
+    },
+    {
+      "gameID": "165957",
+      "title": "Hollow Knight",
+      "cheapest_ever_usd": 7.49,
+      "deals": [
+        {
+          "dealID": "fallback-hollow-steam",
+          "storeID": "1",
+          "salePrice": 7.49,
+          "normalPrice": 14.99,
+          "savings": 50.03,
+          "metacriticScore": "87"
+        },
+        {
+          "dealID": "fallback-hollow-humble",
+          "storeID": "11",
+          "salePrice": 8.99,
+          "normalPrice": 14.99,
+          "savings": 40.03,
+          "metacriticScore": "87"
+        }
+      ]
+    },
+    {
+      "gameID": "234077",
+      "title": "Elden Ring",
+      "cheapest_ever_usd": 35.99,
+      "deals": [
+        {
+          "dealID": "fallback-elden-gmg",
+          "storeID": "3",
+          "salePrice": 38.99,
+          "normalPrice": 59.99,
+          "savings": 35.01,
+          "metacriticScore": "94"
+        },
+        {
+          "dealID": "fallback-elden-steam",
+          "storeID": "1",
+          "salePrice": 41.99,
+          "normalPrice": 59.99,
+          "savings": 30.01,
+          "metacriticScore": "94"
+        }
+      ]
+    },
+    {
+      "gameID": "214712",
+      "title": "Cyberpunk 2077",
+      "cheapest_ever_usd": 26.99,
+      "deals": [
+        {
+          "dealID": "fallback-cp2077-gog",
+          "storeID": "7",
+          "salePrice": 29.99,
+          "normalPrice": 59.99,
+          "savings": 50.01,
+          "metacriticScore": "86"
+        },
+        {
+          "dealID": "fallback-cp2077-steam",
+          "storeID": "1",
+          "salePrice": 29.99,
+          "normalPrice": 59.99,
+          "savings": 50.01,
+          "metacriticScore": "86"
+        }
+      ]
+    },
+    {
+      "gameID": "212553",
+      "title": "Hades",
+      "cheapest_ever_usd": 8.49,
+      "deals": [
+        {
+          "dealID": "fallback-hades-steam",
+          "storeID": "1",
+          "salePrice": 9.99,
+          "normalPrice": 24.99,
+          "savings": 60.02,
+          "metacriticScore": "93"
+        },
+        {
+          "dealID": "fallback-hades-epic",
+          "storeID": "25",
+          "salePrice": 11.24,
+          "normalPrice": 24.99,
+          "savings": 55.02,
+          "metacriticScore": "93"
+        }
+      ]
+    },
+    {
+      "gameID": "148251",
+      "title": "Stardew Valley",
+      "cheapest_ever_usd": 7.49,
+      "deals": [
+        {
+          "dealID": "fallback-stardew-steam",
+          "storeID": "1",
+          "salePrice": 8.99,
+          "normalPrice": 14.99,
+          "savings": 40.03,
+          "metacriticScore": "89"
+        },
+        {
+          "dealID": "fallback-stardew-gog",
+          "storeID": "7",
+          "salePrice": 9.99,
+          "normalPrice": 14.99,
+          "savings": 33.36,
+          "metacriticScore": "89"
+        }
+      ]
+    },
+    {
+      "gameID": "210483",
+      "title": "Red Dead Redemption 2",
+      "cheapest_ever_usd": 19.79,
+      "deals": [
+        {
+          "dealID": "fallback-rdr2-steam",
+          "storeID": "1",
+          "salePrice": 19.79,
+          "normalPrice": 59.99,
+          "savings": 67.01,
+          "metacriticScore": "93"
+        },
+        {
+          "dealID": "fallback-rdr2-epic",
+          "storeID": "25",
+          "salePrice": 22.99,
+          "normalPrice": 59.99,
+          "savings": 61.68,
+          "metacriticScore": "93"
+        }
+      ]
+    },
+    {
+      "gameID": "253726",
+      "title": "Resident Evil 4",
+      "cheapest_ever_usd": 19.99,
+      "deals": [
+        {
+          "dealID": "fallback-re4-fanatical",
+          "storeID": "15",
+          "salePrice": 19.99,
+          "normalPrice": 39.99,
+          "savings": 50.01,
+          "metacriticScore": "91"
+        },
+        {
+          "dealID": "fallback-re4-steam",
+          "storeID": "1",
+          "salePrice": 23.99,
+          "normalPrice": 39.99,
+          "savings": 40.01,
+          "metacriticScore": "91"
+        }
+      ]
+    },
+    {
+      "gameID": "240974",
+      "title": "God of War",
+      "cheapest_ever_usd": 19.99,
+      "deals": [
+        {
+          "dealID": "fallback-gow-steam",
+          "storeID": "1",
+          "salePrice": 24.99,
+          "normalPrice": 49.99,
+          "savings": 50.01,
+          "metacriticScore": "93"
+        }
+      ]
+    },
+    {
+      "gameID": "218824",
+      "title": "Baldur's Gate 3",
+      "cheapest_ever_usd": 47.99,
+      "deals": [
+        {
+          "dealID": "fallback-bg3-steam",
+          "storeID": "1",
+          "salePrice": 47.99,
+          "normalPrice": 59.99,
+          "savings": 20.0,
+          "metacriticScore": "96"
+        },
+        {
+          "dealID": "fallback-bg3-gog",
+          "storeID": "7",
+          "salePrice": 47.99,
+          "normalPrice": 59.99,
+          "savings": 20.0,
+          "metacriticScore": "96"
+        }
+      ]
+    },
+    {
+      "gameID": "612",
+      "title": "Batman: Arkham Knight",
+      "cheapest_ever_usd": 1.99,
+      "deals": [
+        {
+          "dealID": "fallback-batman-steam",
+          "storeID": "1",
+          "salePrice": 3.99,
+          "normalPrice": 19.99,
+          "savings": 80.04,
+          "metacriticScore": "70"
+        }
+      ]
+    },
+    {
+      "gameID": "107598",
+      "title": "Grand Theft Auto V",
+      "cheapest_ever_usd": 14.98,
+      "deals": [
+        {
+          "dealID": "fallback-gtav-steam",
+          "storeID": "1",
+          "salePrice": 14.98,
+          "normalPrice": 29.99,
+          "savings": 50.05,
+          "metacriticScore": "96"
+        }
+      ]
+    }
+  ]
+}

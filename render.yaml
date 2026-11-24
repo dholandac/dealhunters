@@ -1,0 +1,13 @@
+# Configuração pronta para deploy gratuito no Render (https://render.com)
+services:
+  - type: web
+    name: deal-hunters-chatbot
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && python -m spacy download pt_core_news_sm && python data/seed_data.py
+    startCommand: uvicorn web_app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DEALHUNTERS_OFFLINE
+        value: "0"

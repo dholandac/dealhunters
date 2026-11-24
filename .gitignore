@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# Variáveis sensíveis
+.env
+
+# Logs e arquivos temporários
+*.log
+.DS_Store
+Thumbs.db
+
+# Observação: dealhunters.db pode ser versionado pré-populado para entrega acadêmica.
+# Descomente a linha abaixo se preferir não versionar o arquivo SQLite:
+# dealhunters.db
