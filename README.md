@@ -1,6 +1,6 @@
 # Deal Hunters — Chatbot Corporativo de Ofertas e Suporte em Jogos Digitais
 
-Projeto prático desenvolvido em **Python** com **Arquitetura Modular Desacoplada** para a disciplina de *Desenvolvimento de Chat Bot*.
+Projeto prático desenvolvido em **Python** com **Arquitetura Modular Desacoplada**.
 
 O **Hunter**, assistente virtual oficial da loja de jogos digitais **Deal Hunters**, combina:
 - **Eixo 1 — NLU/NLP (`spaCy` + suporte `NLTK`):** normalização de gírias/ruídos ortográficos, tokenização, remoção seletiva de stopwords, lematização, classificação de intenções via TF-IDF + Cosseno, NER híbrido (`EntityRuler` + extração dinâmica) e detecção de sentimento/urgência.
@@ -97,11 +97,4 @@ Acesse `http://localhost:8000` no navegador.
 
 ---
 
-## Alternativas de Hospedagem na Internet (Bônus)
 
-A apresentação oficial da disciplina ocorre **no terminal** (`python main.py`), mas o projeto já inclui `web_app.py` (FastAPI) para publicar uma demo online (útil como QR Code nos slides):
-
-1. **Render (Plano Free — Recomendado):** já configurado em `render.yaml`. Conecte o repositório GitHub no [Render](https://render.com) → *New Blueprint* → deploy automático (512 MB RAM, suficiente para `spaCy pt_core_news_sm`). *Obs.: hiberna após 15 min de inatividade e o SQLite reinicia a cada redeploy.*
-2. **Hugging Face Spaces (Docker/Gradio/FastAPI Free):** 16 GB de RAM gratuitos — excelente se o grupo quiser evitar qualquer limite de memória com modelos NLP maiores.
-3. **PythonAnywhere (Plano Beginner Free):** ótimo para Python + SQLite persistente em disco, porém o plano gratuito restringe domínios externos via whitelist (a CheapShark API pode não estar liberada no plano free; funciona com `--offline` ou upgrade).
-4. **Koyeb / Railway:** suportam deploy direto via GitHub usando o `Procfile` incluso (Railway oferece crédito trial/hobby; Koyeb tem tier gratuito para 1 serviço web).
