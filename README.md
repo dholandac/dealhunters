@@ -1,6 +1,6 @@
 # Deal Hunters — Chatbot Corporativo de Ofertas e Suporte em Jogos Digitais
 
-Projeto prático desenvolvido em **Python** com **Arquitetura Modular Desacoplada** para a disciplina de *Desenvolvimento de Chat Bot (Trabalho P2 — Prof. Claudio Filgueira)*.
+Projeto prático desenvolvido em **Python** com **Arquitetura Modular Desacoplada** para a disciplina de *Desenvolvimento de Chat Bot*.
 
 O **Hunter**, assistente virtual oficial da loja de jogos digitais **Deal Hunters**, combina:
 - **Eixo 1 — NLU/NLP (`spaCy` + suporte `NLTK`):** normalização de gírias/ruídos ortográficos, tokenização, remoção seletiva de stopwords, lematização, classificação de intenções via TF-IDF + Cosseno, NER híbrido (`EntityRuler` + extração dinâmica) e detecção de sentimento/urgência.
