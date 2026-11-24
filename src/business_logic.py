@@ -227,6 +227,7 @@ class BusinessLogic:
                     f"NLU falhou por {novas_falhas} vezes consecutivas. "
                     f"Última mensagem: '{nlu_res.texto_original}'"
                 ),
+                falhas_consecutivas=novas_falhas,
             )
 
         return LogicOutcome(
@@ -711,6 +712,7 @@ class BusinessLogic:
         motivo: str,
         prioridade: str,
         resumo: str,
+        falhas_consecutivas: Optional[int] = None,
     ) -> LogicOutcome:
         evento = self.db.registrar_transbordo(
             sessao_id=sessao.id,
@@ -734,7 +736,11 @@ class BusinessLogic:
             resposta=resposta,
             novo_estado="TRANSBORDO_HUMANO",
             contexto_atualizado=novo_ctx,
-            falhas_consecutivas=sessao.falhas_consecutivas,
+            falhas_consecutivas=(
+                sessao.falhas_consecutivas
+                if falhas_consecutivas is None
+                else falhas_consecutivas
+            ),
             transbordo_ativo=True,
             origem_dados="database",
             detalhes_extra={

@@ -117,8 +117,12 @@ def test_cenario_3_fallback_duas_falhas_consecutivas_transbordo(
     # 2ª falha consecutiva: aciona transbordo humano e grava em TransbordoHumano
     r2 = bot_isolado.responder("quem ganhou a partida de tenis ontem?", token)
     assert r2.estado_atual == "TRANSBORDO_HUMANO"
+    assert r2.falhas_consecutivas == 2
     assert r2.transbordo_ativo is True
     assert "DH-ATD-" in r2.resposta
+
+    sessao = bot_isolado.db.obter_ou_criar_sessao(session_token=token)
+    assert sessao.falhas_consecutivas == 2
 
     transbordos = bot_isolado.db.listar_transbordos(limite=5)
     assert len(transbordos) >= 1
