@@ -41,7 +41,6 @@ dealhunters/
 
 ```powershell
 # 1. Acesse a pasta do projeto
-cd c:\Users\danie\MinhasCoisas\Desenvolvendo\Pessoal\dealhunters
 
 # 2. Crie e ative o ambiente virtual
 python -m venv .venv
