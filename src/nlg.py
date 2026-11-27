@@ -1,9 +1,4 @@
-"""
-Módulo NLG (Natural Language Generation) — Persona Hunter (Deal Hunters).
-
-Responsável exclusivamente por formatar respostas naturais, empáticas e
-estruturadas mantendo o tom de voz corporativo da Deal Hunters.
-"""
+"""Formatação das respostas do assistente Hunter."""
 
 from __future__ import annotations
 

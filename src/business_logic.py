@@ -1,9 +1,4 @@
-"""
-Eixo 4 — Regras de Negócio, Máquina de Estados (Stateful), Fallback e Transbordo Humano.
-
-Orquestra as transições de `SessaoUsuario` com base na saída do `NLU`,
-consulta o `CheapSharkClient` e o `Database` e delega a formatação ao `NLG`.
-"""
+"""Regras de negócio e máquina de estados das sessões."""
 
 from __future__ import annotations
 
@@ -27,7 +22,7 @@ class LogicOutcome:
     contexto_atualizado: Dict[str, Any]
     falhas_consecutivas: int
     transbordo_ativo: bool = False
-    origem_dados: str = "interno"  # interno | api_live | cache_fallback | database
+    origem_dados: str = "interno"
     detalhes_extra: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -57,9 +52,6 @@ class BusinessLogic:
         self.nlg = nlg
         self.max_fallbacks = max_fallbacks
 
-    # ------------------------------------------------------------------
-    # Entrada principal de decisão por turno
-    # ------------------------------------------------------------------
 
     def processar_turno(
         self, sessao: SessaoUsuario, nlu_res: NLUResult
@@ -68,7 +60,6 @@ class BusinessLogic:
         contexto = sessao.get_contexto()
         texto_limpo = remover_acentos(nlu_res.texto_original.strip().lower())
 
-        # 1) Comando de reinício após transbordo ou a qualquer momento
         if texto_limpo in {"reiniciar", "nova conversa", "comecar de novo", "reset"}:
             return LogicOutcome(
                 resposta=self.nlg.boas_vindas(),
@@ -79,7 +70,6 @@ class BusinessLogic:
                 origem_dados="interno",
             )
 
-        # 2) Sessão já escalada para atendente humano
         if sessao.transbordo_ativo or estado == "TRANSBORDO_HUMANO":
             protocolo = contexto.get("protocolo_transbordo", "EM_ANDAMENTO")
             return LogicOutcome(
@@ -91,7 +81,6 @@ class BusinessLogic:
                 origem_dados="database",
             )
 
-        # 3) Eixo 4 — Transbordo imediato por sentimento de extrema insatisfação ou urgência
         if nlu_res.sentimento == "CRITICO_URGENTE":
             return self._executar_transbordo(
                 sessao=sessao,
@@ -104,7 +93,6 @@ class BusinessLogic:
                 ),
             )
 
-        # 4) Solicitação explícita de atendimento humano
         if nlu_res.intencao == "falar_atendente":
             return self._executar_transbordo(
                 sessao=sessao,
@@ -114,7 +102,6 @@ class BusinessLogic:
                 resumo=f"Cliente solicitou atendimento humano: '{nlu_res.texto_original}'",
             )
 
-        # 5) Intenções globais (não ficam presas em subestados)
         if nlu_res.intencao == "despedida":
             return LogicOutcome(
                 resposta=self.nlg.despedida(),
@@ -153,7 +140,6 @@ class BusinessLogic:
                 detalhes_extra={"registros_anonimizados": qtd},
             )
 
-        # 6) Tratamento sensível ao estado atual (Máquina de Estados Stateful)
         if estado == "AGUARDANDO_JOGO":
             resultado_estado = self._tratar_aguardando_jogo(sessao, contexto, nlu_res)
             if resultado_estado is not None:
@@ -185,7 +171,6 @@ class BusinessLogic:
             if resultado_estado is not None:
                 return resultado_estado
 
-        # 7) Despacho por intenção principal
         intencao = nlu_res.intencao
 
         if intencao == "saudacao":
@@ -215,7 +200,6 @@ class BusinessLogic:
         if intencao == "solicitar_reembolso":
             return self._fluxo_reembolso(contexto, nlu_res)
 
-        # 8) Eixo 4 — Tratamento de Fallback (2 falhas consecutivas -> Transbordo Humano)
         novas_falhas = sessao.falhas_consecutivas + 1
         if novas_falhas >= self.max_fallbacks:
             return self._executar_transbordo(
@@ -238,9 +222,6 @@ class BusinessLogic:
             origem_dados="interno",
         )
 
-    # ------------------------------------------------------------------
-    # Handlers dos Estados da Máquina de Estados (Stateful)
-    # ------------------------------------------------------------------
 
     def _tratar_aguardando_jogo(
         self,
@@ -248,7 +229,6 @@ class BusinessLogic:
         contexto: Dict[str, Any],
         nlu_res: NLUResult,
     ) -> Optional[LogicOutcome]:
-        # Permite trocar de assunto se o usuário disparar claramente outra intenção
         if nlu_res.intencao in {
             "consultar_pedido",
             "buscar_promocoes",
@@ -258,7 +238,6 @@ class BusinessLogic:
 
         jogo = nlu_res.entidades.get("jogo")
         if not jogo:
-            # Aceita resposta direta do usuário como título do jogo (ex.: "Portal 2")
             texto_bruto = nlu_res.texto_original.strip(" ?!.,")
             if 2 <= len(texto_bruto) <= 50 and len(texto_bruto.split()) <= 7:
                 jogo = texto_bruto
@@ -306,7 +285,6 @@ class BusinessLogic:
                     valor = None
 
         if valor is None:
-            # Se o usuário mudou de assunto, deixa o despacho normal tratar
             if nlu_res.intencao != "desconhecida":
                 return None
             return None
@@ -385,7 +363,6 @@ class BusinessLogic:
         contexto: Dict[str, Any],
         nlu_res: NLUResult,
     ) -> Optional[LogicOutcome]:
-        # Permite selecionar opção apenas digitando o número (ex.: "1" ou "2")
         texto_strip = nlu_res.texto_original.strip()
         if texto_strip.isdigit() and 1 <= int(texto_strip) <= 5:
             nlu_res.entidades["opcao_numero"] = int(texto_strip)
@@ -394,7 +371,6 @@ class BusinessLogic:
         if nlu_res.intencao == "selecionar_opcao":
             return self._fluxo_selecionar_opcao(contexto, nlu_res)
 
-        # Filtro contextual sobre o último jogo exibido (ex.: "só na Steam")
         loja = nlu_res.entidades.get("loja")
         valor = nlu_res.entidades.get("valor_brl")
         jogo_novo = nlu_res.entidades.get("jogo")
@@ -414,9 +390,6 @@ class BusinessLogic:
 
         return None
 
-    # ------------------------------------------------------------------
-    # Fluxos Principais de Negócio
-    # ------------------------------------------------------------------
 
     def _fluxo_consultar_preco(
         self, contexto: Dict[str, Any], nlu_res: NLUResult

@@ -1,9 +1,4 @@
-"""
-Fachada principal `DealHuntersBot` que integra os módulos desacoplados:
-NLU -> BusinessLogic -> (CheapSharkClient + Database) -> NLG.
-
-Pode ser consumida tanto pelo terminal (`main.py`) quanto por uma API/Web (`web_app.py`).
-"""
+"""Fachada principal do chatbot DealHuntersBot."""
 
 from __future__ import annotations
 
@@ -86,13 +81,10 @@ class DealHuntersBot:
         sessao = self.db.obter_ou_criar_sessao(session_token=session_token)
         estado_anterior = sessao.estado_atual
 
-        # 1) Análise NLU (Eixo 1)
         nlu_res = self.nlu.analisar(mensagem)
 
-        # 2) Regras de Negócio + Integração API + Máquina de Estados (Eixos 2, 3 e 4)
         outcome = self.logic.processar_turno(sessao, nlu_res)
 
-        # 3) Atualiza SessaoUsuario (Stateful)
         self.db.atualizar_sessao(
             session_token=sessao.session_token,
             estado_atual=outcome.novo_estado,
@@ -101,8 +93,6 @@ class DealHuntersBot:
             transbordo_ativo=outcome.transbordo_ativo,
         )
 
-        # 4) Auditoria ConversaLog com sanitização automática LGPD
-        # (se o usuário acabou de pedir anonimização LGPD, não regravamos a entrada crua)
         if nlu_res.intencao != "anonimizar_lgpd":
             self.db.registrar_log(
                 sessao_id=sessao.id,

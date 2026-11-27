@@ -1,17 +1,4 @@
-"""
-Eixo 2 — Integração Sistêmica via API REST (requests).
-
-Consome em tempo real:
-1. IsThereAnyDeal (ITAD) API v2/v3 (https://api.isthereanydeal.com) — preços REAIS regionalizados em BRL (country=BR):
-   - GET  /service/shops/v1?country=BR : catálogo de lojas digitais no Brasil (Steam, Nuuvem, GOG, Epic, etc.)
-   - GET  /games/search/v1?title=...   : busca de jogos por título (retorna UUID ITAD)
-   - POST /games/prices/v3?country=BR  : preços reais em BRL em múltiplas lojas + menor preço histórico em BRL
-   - GET  /deals/v2?country=BR         : promoções ativas em BRL filtradas por loja e orçamento
-2. CheapShark API v1.0 + AwesomeAPI (mantidos como legado/opção secundária em USD->BRL).
-
-Inclui tratamento robusto de exceções (Timeout, ConnectionError, HTTPError, JSON inválido),
-retentativas com backoff leve e fallback automático para catálogo local em caso de queda de rede.
-"""
+"""Clientes HTTP para busca de preços (IsThereAnyDeal e CheapShark)."""
 
 from __future__ import annotations
 
@@ -71,9 +58,9 @@ class ApiResult:
 
     sucesso: bool
     dados: Any = None
-    origem: str = "api_live"  # api_live | cache_fallback | erro
+    origem: str = "api_live"
     cotacao_usd_brl: Optional[float] = config.DEFAULT_USD_BRL_RATE
-    origem_cotacao: str = "fallback"  # brl_nativo | awesomeapi_live | fallback_padrao | fallback_offline
+    origem_cotacao: str = "fallback"
     erro_amigavel: Optional[str] = None
     detalhe_tecnico: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -170,9 +157,6 @@ class CheapSharkClient:
         self._stores_loaded_live: bool = False
         self._fallback_catalog: Optional[Dict[str, Any]] = None
 
-    # ------------------------------------------------------------------
-    # Utilitários internos de HTTP e Fallback
-    # ------------------------------------------------------------------
 
     @staticmethod
     def montar_link_oferta(deal_id: str) -> str:
@@ -296,9 +280,6 @@ class CheapSharkClient:
             "link": CheapSharkClient.montar_link_oferta(deal_id),
         }
 
-    # ------------------------------------------------------------------
-    # Operações Públicas de Negócio
-    # ------------------------------------------------------------------
 
     def consultar_preco_jogo(
         self,
@@ -313,7 +294,6 @@ class CheapSharkClient:
         taxa, origem_taxa = self.exchange_client.obter_taxa_usd_brl()
         store_id_filtro = self.resolver_store_id(loja_filtro)
 
-        # 1) Busca o jogo principal na API live
         jogos_payload, erro_games = self._request_json(
             "/games", params={"title": titulo, "limit": 5}
         )
@@ -328,7 +308,6 @@ class CheapSharkClient:
                     origem_cotacao=origem_taxa,
                 )
 
-            # Prioriza correspondência mais próxima do título solicitado
             titulo_lower = titulo.strip().lower()
             melhor_jogo = jogos_payload[0]
             for candidato in jogos_payload:
@@ -381,7 +360,6 @@ class CheapSharkClient:
                         )
                     )
             else:
-                # Fallback leve usando dados do próprio /games caso /game falhe
                 try:
                     cheapest_usd = float(melhor_jogo.get("cheapest", 0))
                 except (TypeError, ValueError):
@@ -420,7 +398,6 @@ class CheapSharkClient:
                 origem_cotacao=origem_taxa,
             )
 
-        # 2) Contingência automática (catálogo local) em caso de falha de rede/API
         return self._consultar_preco_fallback(
             titulo=titulo,
             loja_filtro=store_id_filtro,
@@ -505,9 +482,6 @@ class CheapSharkClient:
             detalhe_erro=erro,
         )
 
-    # ------------------------------------------------------------------
-    # Contingência local (Resiliência contra quedas de rede)
-    # ------------------------------------------------------------------
 
     def _consultar_preco_fallback(
         self,
@@ -531,7 +505,6 @@ class CheapSharkClient:
                 break
 
         if not match_game:
-            # Tenta correspondência por palavras em comum
             palavras_termo = {p for p in termo.split() if len(p) >= 3}
             for game in catalog.get("games", []):
                 palavras_game = set(str(game.get("title", "")).lower().split())
@@ -660,10 +633,6 @@ class CheapSharkClient:
             detalhe_tecnico=detalhe_erro,
         )
 
-
-# ----------------------------------------------------------------------
-# IsThereAnyDeal (ITAD) API v2/v3 — Preços Reais Regionalizados em BRL
-# ----------------------------------------------------------------------
 
 ITAD_DEFAULT_SHOPS_MAP: Dict[int, str] = {
     4: "Blizzard",
@@ -1011,7 +980,6 @@ class IsThereAnyDealClient:
         else:
             erro_final = erro_search
 
-        # Contingência automática (catálogo local) em caso de falha de rede/API
         fallback_res = self._fallback_helper.consultar_preco_jogo(
             titulo=titulo,
             loja_filtro=loja_filtro,

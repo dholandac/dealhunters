@@ -1,19 +1,4 @@
-"""
-Eixo 1 — Processamento de Linguagem Natural (NLU/NLP) com spaCy e NLTK.
-
-Funcionalidades:
-- Pré-processamento estrutural: normalização de gírias/ruídos ortográficos,
-  correção aproximada (fuzzy) de vocabulário de domínio, tokenização, remoção
-  inteligente de stopwords e lematização via spaCy (pt_core_news_sm), com
-  fallback estrutural via spaCy blank('pt') + NLTK RSLPStemmer caso o modelo
-  estatístico ainda não tenha sido baixado.
-- Reconhecimento de Entidades Nomeadas (NER) híbrido:
-  EntityRuler customizado do spaCy + NER nativo + regras sintáticas para
-  `jogo`, `loja`, `valor_brl`, `codigo_pedido`, `cpf`, `email` e `opcao_numero`.
-- Classificação de Intenções baseada em vetorização TF-IDF + Similaridade de
-  Cosseno sobre lemas (com mascaramento de entidades detectadas).
-- Detecção de Sentimento e Urgência para acionamento do transbordo humano (Eixo 4).
-"""
+"""Processamento de linguagem natural (intenções, entidades e sentimento)."""
 
 from __future__ import annotations
 
@@ -41,18 +26,12 @@ except Exception:
     NLTK_AVAILABLE = False
 
 
-# ---------------------------------------------------------------------------
-# Utilitários de Texto e Vocabulário de Domínio
-# ---------------------------------------------------------------------------
-
-
 def remover_acentos(texto: str) -> str:
     """Remove diacríticos preservando letras ASCII base."""
     normalizado = unicodedata.normalize("NFKD", texto or "")
     return "".join(ch for ch in normalizado if not unicodedata.combining(ch))
 
 
-# Stopwords semânticas preservadas para não perder negações, valores ou perguntas
 STOPWORDS_PRESERVAR = {
     "nao",
     "nunca",
@@ -130,7 +109,6 @@ STOPWORDS_PT_BASICAS = {
     "voce",
 }
 
-# Normalização de gírias, abreviações e erros ortográficos comuns no pt-BR gamer
 NORMALIZACAO_TOKENS: Dict[str, str] = {
     "qnt": "quanto",
     "qnto": "quanto",
@@ -223,7 +201,6 @@ NORMALIZACAO_TOKENS: Dict[str, str] = {
     "ñ": "nao",
 }
 
-# Apelidos populares de jogos (normalizados antes do NER)
 APELIDOS_JOGOS: List[Tuple[re.Pattern[str], str]] = [
     (re.compile(r"\b(?:o\s+)?bruxeiro(?:\s*3)?\b", re.IGNORECASE), "The Witcher 3"),
     (re.compile(r"\bwitcher\s*3\b", re.IGNORECASE), "The Witcher 3"),
@@ -239,7 +216,6 @@ APELIDOS_JOGOS: List[Tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bstardew\b(?!\s+valley)", re.IGNORECASE), "Stardew Valley"),
 ]
 
-# Jogos conhecidos para o EntityRuler do spaCy (além da extração dinâmica de qualquer título)
 CATALOGO_JOGOS_NER: List[str] = [
     "The Witcher 3: Wild Hunt",
     "The Witcher 3",
@@ -373,7 +349,6 @@ TERMOS_NAO_JOGO = {
     "favor",
 }
 
-# Palavras válidas comuns que nunca devem ser alteradas pela correção aproximada (difflib)
 PALAVRAS_COMUNS_NAO_CORRIGIR = {
     "quando",
     "quanto",
@@ -423,7 +398,6 @@ PALAVRAS_COMUNS_NAO_CORRIGIR = {
     "ganhou",
 }
 
-# Vocabulário canônico para correção ortográfica aproximada (difflib)
 VOCABULARIO_DOMINIO = sorted(
     {
         "quanto",
@@ -486,11 +460,6 @@ VOCABULARIO_DOMINIO = sorted(
     }
 )
 
-
-# ---------------------------------------------------------------------------
-# Base de Treinamento de Intenções (usada pelo classificador TF-IDF + Cosseno)
-# Entidades detectadas são substituídas por marcadores (__jogo__, __valor__, etc.)
-# ---------------------------------------------------------------------------
 
 EXEMPLOS_INTENCOES: Dict[str, List[str]] = {
     "saudacao": [
@@ -620,7 +589,6 @@ EXEMPLOS_INTENCOES: Dict[str, List[str]] = {
     ],
 }
 
-# Léxico de sentimento negativo e gatilhos de urgência/insatisfação extrema (Eixo 4)
 TERMOS_CRITICOS_URGENCIA = {
     "absurdo": 0.45,
     "lixo": 0.50,
@@ -678,11 +646,6 @@ TERMOS_POSITIVOS = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Estruturas de Saída do NLU
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class NLUResult:
     """Resultado completo do pipeline NLP/NLU para uma mensagem do usuário."""
@@ -695,15 +658,10 @@ class NLUResult:
     intencao: str
     confianca: float
     entidades: Dict[str, Any] = field(default_factory=dict)
-    sentimento: str = "NEUTRO"  # POSITIVO | NEUTRO | NEGATIVO | CRITICO_URGENTE
+    sentimento: str = "NEUTRO"
     score_insatisfacao: float = 0.0
     backend_nlp: str = "spacy"
     ranking_intencoes: List[Tuple[str, float]] = field(default_factory=list)
-
-
-# ---------------------------------------------------------------------------
-# Classe NLU (Módulo de Processamento de Linguagem Natural Desacoplado)
-# ---------------------------------------------------------------------------
 
 
 class NLU:
@@ -728,15 +686,11 @@ class NLU:
         self.nlp: Language = self._inicializar_spacy()
         self._configurar_entity_ruler()
 
-        # Índices TF-IDF pré-calculados a partir da base de treinamento
         self._idf: Dict[str, float] = {}
         self._max_idf: float = 3.0
         self._vetores_treinamento: List[Tuple[str, Dict[str, float], float]] = []
         self._treinar_classificador()
 
-    # ------------------------------------------------------------------
-    # Inicialização do Pipeline spaCy / NLTK
-    # ------------------------------------------------------------------
 
     def _carregar_stopwords_nltk(self) -> None:
         if not NLTK_AVAILABLE:
@@ -748,7 +702,6 @@ class NLU:
                 if norm not in STOPWORDS_PRESERVAR:
                     self._stopwords.add(norm)
         except LookupError:
-            # Corpus stopwords do NLTK não baixado — mantém stopwords base + spaCy
             pass
 
         try:
@@ -766,7 +719,6 @@ class NLU:
                 "spacy:blank_pt+nltk" if self._nltk_stemmer else "spacy:blank_pt"
             )
 
-        # Garante que palavras críticas nunca sejam descartadas pelo is_stop do spaCy
         for palavra in STOPWORDS_PRESERVAR:
             nlp.vocab[palavra].is_stop = False
             if palavra == "nao":
@@ -786,7 +738,6 @@ class NLU:
 
         patterns: List[Dict[str, Any]] = []
 
-        # Padrões de lojas digitais
         for alias in sorted(LOJAS_NER.keys(), key=len, reverse=True):
             tokens = alias.split()
             patterns.append(
@@ -796,7 +747,6 @@ class NLU:
                 }
             )
 
-        # Padrões de catálogo de jogos
         for titulo in sorted(CATALOGO_JOGOS_NER, key=len, reverse=True):
             doc_titulo = self.nlp.make_doc(titulo)
             patterns.append(
@@ -806,7 +756,6 @@ class NLU:
                 }
             )
 
-        # Padrão para código de pedido corporativo (ex.: DH-1001)
         patterns.append(
             {
                 "label": "CODIGO_PEDIDO",
@@ -814,7 +763,6 @@ class NLU:
             }
         )
 
-        # Padrão para CPF formatado ou numérico
         patterns.append(
             {
                 "label": "CPF",
@@ -826,9 +774,6 @@ class NLU:
 
         ruler.add_patterns(patterns)
 
-    # ------------------------------------------------------------------
-    # Pré-processamento Estrutural (Normalização + Tokenização + Lematização)
-    # ------------------------------------------------------------------
 
     def _normalizar_texto(self, texto: str) -> str:
         """
@@ -850,7 +795,6 @@ class NLU:
             lower = parte.lower()
             sem_acento = remover_acentos(lower)
 
-            # Preserva códigos (DH-1001), números ou nomes próprios capitalizados no meio da frase
             if lower.isdigit() or re.match(r"^dh\d+$", lower):
                 resultado.append(parte)
                 continue
@@ -895,7 +839,6 @@ class NLU:
                 continue
             tokens.append(bruto)
 
-            # Preserva marcadores sintéticos de entidades (__jogo__, __valor__, etc.)
             if bruto.startswith("__") and bruto.endswith("__"):
                 sem_stopwords.append(bruto.lower())
                 lemas.append(bruto.lower())
@@ -922,9 +865,6 @@ class NLU:
 
         return tokens, sem_stopwords, lemas
 
-    # ------------------------------------------------------------------
-    # Treinamento e Inferência do Classificador de Intenções (TF-IDF + Cosseno)
-    # ------------------------------------------------------------------
 
     def _treinar_classificador(self) -> None:
         docs_por_intencao: List[Tuple[str, List[str]]] = []
@@ -992,7 +932,6 @@ class NLU:
             if sim > melhores_por_intencao.get(intencao, 0.0):
                 melhores_por_intencao[intencao] = sim
 
-        # Reforço contextual leve guiado pelas entidades NER extraídas
         if "codigo_pedido" in entidades and "solicitar_reembolso" not in (
             max(melhores_por_intencao, key=melhores_por_intencao.get, default=""),
         ):
@@ -1019,9 +958,6 @@ class NLU:
 
         return melhor_intencao, round(melhor_score, 3), ranking[:3]
 
-    # ------------------------------------------------------------------
-    # Reconhecimento de Entidades Nomeadas (NER Híbrido)
-    # ------------------------------------------------------------------
 
     def _extrair_entidades(
         self, texto_original: str, texto_normalizado: str
@@ -1033,7 +969,6 @@ class NLU:
         entidades: Dict[str, Any] = {}
         texto_mascarado = texto_normalizado
 
-        # 1) CPF
         m_cpf = re.search(r"\b(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b", texto_original)
         if m_cpf:
             entidades["cpf"] = m_cpf.group(1)
@@ -1041,7 +976,6 @@ class NLU:
                 r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b", " __cpf__ ", texto_mascarado
             )
 
-        # 2) E-mail
         m_email = re.search(
             r"\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b", texto_original
         )
@@ -1049,7 +983,6 @@ class NLU:
             entidades["email"] = m_email.group(1)
             texto_mascarado = texto_mascarado.replace(m_email.group(1), " __email__ ")
 
-        # 3) Código de Pedido (ex.: DH-1001, #1001, pedido 1002)
         m_ped = re.search(r"\b(DH-?\d{3,6})\b", texto_original, flags=re.IGNORECASE)
         if not m_ped:
             m_ped = re.search(
@@ -1070,7 +1003,6 @@ class NLU:
                 re.escape(m_ped.group(1)), " __pedido__ ", texto_mascarado, flags=re.IGNORECASE
             )
 
-        # 4) Valor monetário em BRL (ex.: R$ 50, 40 reais, ate 120,50)
         m_valor = re.search(
             r"(?:r\$\s*(\d+(?:[.,]\d{1,2})?))|"
             r"(?:(\d+(?:[.,]\d{1,2})?)\s*(?:reais|real|brl|conto|contos|pila|pilas|mangos))|"
@@ -1089,7 +1021,6 @@ class NLU:
                 except ValueError:
                     pass
 
-        # 5) Número de opção em fluxo Stateful (ex.: "opção 2", "o primeiro", "link do 3")
         ordinais = {
             "primeiro": 1,
             "primeira": 1,
@@ -1125,7 +1056,6 @@ class NLU:
                     )
                     break
 
-        # 6) Pipeline spaCy (EntityRuler + NER nativo) para LOJA e JOGO
         doc = self.nlp(texto_normalizado)
         for ent in doc.ents:
             if ent.label_ == "LOJA" and "loja" not in entidades:
@@ -1146,7 +1076,6 @@ class NLU:
                     flags=re.IGNORECASE,
                 )
 
-        # 7) Extração dinâmica de JOGO não listado no catálogo (para qualquer título na CheapShark!)
         if "jogo" not in entidades:
             candidato = self._extrair_jogo_dinamico(texto_mascarado, doc)
             if candidato:
@@ -1187,7 +1116,6 @@ class NLU:
             if candidato:
                 return candidato
 
-        # Fallback via NER nativo do spaCy (MISC / WORK_OF_ART) se o modelo estatístico estiver ativo
         for ent in doc.ents:
             if ent.label_ in {"MISC", "WORK_OF_ART"}:
                 candidato = self._limpar_candidato_jogo(ent.text)
@@ -1198,7 +1126,6 @@ class NLU:
 
     @staticmethod
     def _limpar_candidato_jogo(bruto: str) -> Optional[str]:
-        # Remove marcadores internos e caudas de filtro (ex.: "na __loja__", "ate __valor__")
         texto = re.split(
             r"__\w+__|\b(?:na|no|em|ate|até|por|para|pra|hoje|agora|baixar|cair|com|que|quando|favor|em promocao)\b",
             bruto,
@@ -1213,19 +1140,14 @@ class NLU:
         if not palavras:
             return None
 
-        # Rejeita se todas as palavras forem genéricas ou não-jogo
         if all(p in TERMOS_NAO_JOGO or p in LOJAS_NER for p in palavras):
             return None
 
-        # Rejeita se parecer pedido/CPF numérico solto
         if len(palavras) == 1 and palavras[0].isdigit():
             return None
 
         return texto
 
-    # ------------------------------------------------------------------
-    # Análise de Sentimento e Urgência (Eixo 4 — Transbordo Humano)
-    # ------------------------------------------------------------------
 
     def _analisar_sentimento(
         self, texto_original: str, texto_normalizado: str, lemas: List[str]
@@ -1237,18 +1159,15 @@ class NLU:
         norm_sem_acento = remover_acentos(texto_normalizado.lower())
         score = 0.0
 
-        # Checa expressões compostas críticas
         for frase, peso in FRASES_CRITICAS_URGENCIA:
             if frase in norm_sem_acento:
                 score += peso
 
-        # Checa termos individuais críticos (tanto nos tokens quanto nos lemas)
         tokens_simples = set(re.findall(r"[a-z]+", norm_sem_acento)) | set(lemas)
         for termo in tokens_simples:
             if termo in TERMOS_CRITICOS_URGENCIA:
                 score += TERMOS_CRITICOS_URGENCIA[termo]
 
-        # Ênfase emocional: excesso de exclamações ou frase inteira em CAIXA ALTA
         if texto_original.count("!") >= 2:
             score += 0.15
         letras = [c for c in texto_original if c.isalpha()]
@@ -1267,9 +1186,6 @@ class NLU:
 
         return "NEUTRO", score
 
-    # ------------------------------------------------------------------
-    # Ponto de Entrada Público
-    # ------------------------------------------------------------------
 
     def analisar(self, mensagem: str) -> NLUResult:
         """Executa todo o pipeline NLU sobre a mensagem do usuário."""

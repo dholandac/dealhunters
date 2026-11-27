@@ -1,10 +1,4 @@
-"""
-Script utilitário para inicializar e pré-popular o banco SQLite (dealhunters.db)
-com pedidos digitais fictícios, alerta e log de auditoria para testes e Live Demo.
-
-Uso:
-    python data/seed_data.py
-"""
+"""Popula o banco SQLite com dados iniciais de teste."""
 
 from __future__ import annotations
 

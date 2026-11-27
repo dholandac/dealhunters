@@ -1,12 +1,4 @@
-"""
-Arquivo Mestre do Projeto Deal Hunters — Execução Interativa no Terminal (Live Demo).
-
-Uso:
-    python main.py                  # Modo padrão (API CheapShark em tempo real)
-    python main.py --debug          # Exibe pipeline NLU, lemas, NER e estados a cada turno
-    python main.py --offline        # Simula contingência offline (resiliência de rede)
-    python main.py --session ID     # Retoma uma sessão persistida no SQLite (Stateful)
-"""
+"""Interface de terminal (CLI) do Deal Hunters."""
 
 from __future__ import annotations
 

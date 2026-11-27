@@ -1,7 +1,4 @@
-"""
-Configurações centralizadas do projeto Deal Hunters.
-Permite sobrescrever parâmetros via variáveis de ambiente (.env).
-"""
+"""Configurações do projeto Deal Hunters."""
 
 from __future__ import annotations
 
@@ -19,22 +16,17 @@ except ImportError:
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 
-# Identidade corporativa do chatbot
 APP_NAME = os.getenv("APP_NAME", "Deal Hunters")
 BOT_NAME = os.getenv("BOT_NAME", "Hunter")
 COMPANY_SLOGAN = "Sua central inteligente de ofertas e suporte em jogos digitais"
 
-# Banco de dados (Eixo 3: SQLAlchemy + SQLite)
 DEFAULT_DB_PATH = BASE_DIR / "dealhunters.db"
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH.as_posix()}")
 
-# APIs REST externas (Eixo 2: requests)
-# 1) IsThereAnyDeal (ITAD) — preços reais regionalizados em BRL (country=BR)
 ITAD_API_KEY = os.getenv("ITAD_API_KEY", "").strip()
 ITAD_BASE_URL = os.getenv("ITAD_BASE_URL", "https://api.isthereanydeal.com")
 ITAD_COUNTRY = os.getenv("ITAD_COUNTRY", "BR").strip().upper() or "BR"
 
-# 2) CheapShark (legado/contingência em USD)
 CHEAPSHARK_BASE_URL = os.getenv(
     "CHEAPSHARK_BASE_URL", "https://www.cheapshark.com/api/1.0"
 )
@@ -55,7 +47,6 @@ EXCHANGE_CACHE_TTL_SECONDS = int(os.getenv("EXCHANGE_CACHE_TTL_SECONDS", "1800")
 API_TIMEOUT_SECONDS = float(os.getenv("API_TIMEOUT_SECONDS", "8.0"))
 API_MAX_RETRIES = int(os.getenv("API_MAX_RETRIES", "2"))
 
-# Modo offline opcional (útil para testes ou contingência de rede em laboratório)
 OFFLINE_MODE = os.getenv("DEALHUNTERS_OFFLINE", "0").strip().lower() in {
     "1",
     "true",
@@ -64,14 +55,11 @@ OFFLINE_MODE = os.getenv("DEALHUNTERS_OFFLINE", "0").strip().lower() in {
 }
 FALLBACK_CATALOG_PATH = DATA_DIR / "fallback_catalog.json"
 
-# NLU / NLP (Eixo 1)
 SPACY_MODEL_NAME = os.getenv("SPACY_MODEL_NAME", "pt_core_news_sm")
 NLU_CONFIDENCE_THRESHOLD = float(os.getenv("NLU_CONFIDENCE_THRESHOLD", "0.35"))
 
-# Regras de Negócio e Transbordo (Eixo 4)
 MAX_CONSECUTIVE_FALLBACKS = int(os.getenv("MAX_CONSECUTIVE_FALLBACKS", "2"))
 URGENCY_SCORE_THRESHOLD = float(os.getenv("URGENCY_SCORE_THRESHOLD", "0.65"))
 
-# Servidor Web opcional (FastAPI)
 WEB_HOST = os.getenv("HOST", "0.0.0.0")
 WEB_PORT = int(os.getenv("PORT", "8000"))

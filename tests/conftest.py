@@ -1,4 +1,4 @@
-"""Garante que a raiz do projeto Deal Hunters esteja no sys.path durante o pytest."""
+"""Configuração de path para o pytest."""
 
 from __future__ import annotations
 

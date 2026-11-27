@@ -1,11 +1,4 @@
-"""
-Eixo 3 — Persistência Relacional e Estado de Sessão (SQLAlchemy / SQLite).
-
-Implementa:
-- Tabela obrigatória `SessaoUsuario` (controle Stateful da máquina de estados e contexto).
-- Tabela obrigatória `ConversaLog` (auditoria completa com sanitização LGPD).
-- Tabelas corporativas complementares: `PedidoDigital`, `AlertaPreco` e `TransbordoHumano`.
-"""
+"""Modelos SQLAlchemy, persistência SQLite e sanitização LGPD."""
 
 from __future__ import annotations
 
@@ -43,11 +36,6 @@ EMAIL_REGEX = re.compile(
 def utc_now() -> datetime:
     """Retorna timestamp UTC sem tzinfo para compatibilidade limpa com SQLite."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
-
-
-# ---------------------------------------------------------------------------
-# Utilitários de Conformidade com a LGPD (Lei nº 13.709/2018)
-# ---------------------------------------------------------------------------
 
 
 def limpar_cpf(cpf: str) -> str:
@@ -102,11 +90,6 @@ def sanitizar_entidades_lgpd(entidades: Dict[str, Any]) -> Dict[str, Any]:
         else:
             copia[chave] = valor
     return copia
-
-
-# ---------------------------------------------------------------------------
-# Modelos ORM (SQLAlchemy)
-# ---------------------------------------------------------------------------
 
 
 class SessaoUsuario(Base):
@@ -232,11 +215,6 @@ class TransbordoHumano(Base):
     sessao = relationship("SessaoUsuario", back_populates="transbordos")
 
 
-# ---------------------------------------------------------------------------
-# Classe Database (Camada de Acesso a Dados Desacoplada)
-# ---------------------------------------------------------------------------
-
-
 class Database:
     """Gerencia engine, sessões ORM e operações de persistência no SQLite."""
 
@@ -279,7 +257,6 @@ class Database:
         finally:
             db.close()
 
-    # ---------------------- Gestão de SessaoUsuario ----------------------
 
     def obter_ou_criar_sessao(
         self,
@@ -349,7 +326,6 @@ class Database:
             transbordo_ativo=False,
         )
 
-    # ---------------------- Auditoria ConversaLog (LGPD) ----------------------
 
     def registrar_log(
         self,
@@ -430,7 +406,6 @@ class Database:
                     count += 1
             return count
 
-    # ---------------------- Pedidos Digitais (Pós-venda) ----------------------
 
     def buscar_pedido_por_codigo(
         self, codigo_pedido: str
@@ -453,7 +428,6 @@ class Database:
             return pedido
         return None
 
-    # ---------------------- Alertas de Preço ----------------------
 
     def criar_alerta_preco(
         self,
@@ -487,7 +461,6 @@ class Database:
                 .all()
             )
 
-    # ---------------------- Transbordo Humano (Eixo 4) ----------------------
 
     def registrar_transbordo(
         self,
@@ -521,7 +494,6 @@ class Database:
                 .all()
             )
 
-    # ---------------------- Seed / Dados Pré-Populados ----------------------
 
     def popular_dados_teste(self) -> Dict[str, int]:
         """
@@ -607,7 +579,6 @@ class Database:
                     )
                     criados["pedidos"] += 1
 
-            # Sessão demonstrativa pré-populada para evidência de auditoria no SQLite
             demo_token = "sessao-demo-auditoria-001"
             sessao_demo = (
                 db.query(SessaoUsuario)

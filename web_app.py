@@ -1,13 +1,4 @@
-"""
-Interface Web opcional do Deal Hunters (FastAPI) para hospedagem na internet.
-
-Reutiliza integralmente a mesma arquitetura modular desacoplada (`DealHuntersBot`)
-executada no terminal (`main.py`), demonstrando desacoplamento real entre núcleo
-e canal de atendimento.
-
-Execução local:
-    uvicorn web_app:app --reload
-"""
+"""Interface web FastAPI do Deal Hunters."""
 
 from __future__ import annotations
 
