@@ -16,13 +16,20 @@ import sys
 import uuid
 
 import config
-from src.api_client import CheapSharkClient
+from src.api_client import IsThereAnyDealClient, criar_api_client
 from src.chatbot import DealHuntersBot
 from src.database import Database
 
 
-def imprimir_banner(backend_nlp: str, offline: bool, session_token: str) -> None:
-    modo_api = "CONTINGÊNCIA OFFLINE (cache local)" if offline else "LIVE (CheapShark + AwesomeAPI)"
+def imprimir_banner(
+    backend_nlp: str, offline: bool, session_token: str, usa_itad: bool = True
+) -> None:
+    if offline:
+        modo_api = "CONTINGÊNCIA OFFLINE (cache local)"
+    elif usa_itad:
+        modo_api = "LIVE (IsThereAnyDeal — preços reais em BRL)"
+    else:
+        modo_api = "LIVE (CheapShark + AwesomeAPI)"
     print("=" * 72)
     print(f"  {config.APP_NAME.upper()} — {config.COMPANY_SLOGAN}")
     print("=" * 72)
@@ -82,11 +89,16 @@ def main() -> int:
     debug_ativo = args.debug
 
     db = Database()
-    api_client = CheapSharkClient(offline_mode=offline)
+    api_client = criar_api_client(offline_mode=offline)
     bot = DealHuntersBot(database=db, api_client=api_client, seed_on_start=True)
 
     session_token, boas_vindas = bot.iniciar_sessao(session_token=args.session)
-    imprimir_banner(bot.nlu.backend_nlp, offline, session_token)
+    imprimir_banner(
+        bot.nlu.backend_nlp,
+        offline,
+        session_token,
+        usa_itad=isinstance(api_client, IsThereAnyDealClient),
+    )
     print(f"{config.BOT_NAME}: {boas_vindas}\n")
 
     while True:

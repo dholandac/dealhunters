@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from src.api_client import CheapSharkClient
+from src.api_client import CheapSharkClient, IsThereAnyDealClient, criar_api_client
 from src.business_logic import BusinessLogic
 from src.database import Database, sanitizar_entidades_lgpd
 from src.nlg import NLG
@@ -41,7 +41,7 @@ class DealHuntersBot:
     def __init__(
         self,
         database: Optional[Database] = None,
-        api_client: Optional[CheapSharkClient] = None,
+        api_client: Optional[Any] = None,
         nlu: Optional[NLU] = None,
         nlg: Optional[NLG] = None,
         seed_on_start: bool = True,
@@ -50,7 +50,7 @@ class DealHuntersBot:
         if seed_on_start:
             self.db.popular_dados_teste()
 
-        self.api = api_client or CheapSharkClient()
+        self.api = api_client or criar_api_client()
         self.nlu = nlu or NLU()
         self.nlg = nlg or NLG()
         self.logic = BusinessLogic(

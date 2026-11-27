@@ -13,12 +13,12 @@ Execução:
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
 
-from src.api_client import CheapSharkClient
+from src.api_client import CheapSharkClient, IsThereAnyDealClient
 from src.chatbot import DealHuntersBot
 from src.database import Database
 
@@ -171,3 +171,74 @@ def test_direito_anonimizacao_lgpd(bot_isolado: DealHuntersBot) -> None:
 
     logs = bot_isolado.db.listar_logs_sessao(token, limite=20)
     assert all(log.anonimizado_lgpd for log in logs)
+
+
+def test_itad_preco_real_brl_sem_conversao_usd(tmp_path: Path) -> None:
+    """Valida que IsThereAnyDealClient retorna preços reais em BRL (brl_nativo) sem exibir US$."""
+    client = IsThereAnyDealClient(api_key="chave-teste", offline_mode=False)
+
+    mock_search = MagicMock()
+    mock_search.status_code = 200
+    mock_search.raise_for_status.return_value = None
+    mock_search.json.return_value = [
+        {"id": "uuid-hk", "title": "Hollow Knight", "type": "game"}
+    ]
+
+    mock_prices = MagicMock()
+    mock_prices.status_code = 200
+    mock_prices.raise_for_status.return_value = None
+    mock_prices.json.return_value = [
+        {
+            "id": "uuid-hk",
+            "historyLow": {"all": {"amount": 9.49, "currency": "BRL"}},
+            "deals": [
+                {
+                    "shop": {"id": 61, "name": "Steam"},
+                    "price": {"amount": 46.99, "currency": "BRL"},
+                    "regular": {"amount": 46.99, "currency": "BRL"},
+                    "cut": 0,
+                    "url": "https://itad.link/steam-hk",
+                },
+                {
+                    "shop": {"id": 50, "name": "Nuuvem"},
+                    "price": {"amount": 39.99, "currency": "BRL"},
+                    "regular": {"amount": 46.99, "currency": "BRL"},
+                    "cut": 15,
+                    "url": "https://itad.link/nuuvem-hk",
+                },
+            ],
+        }
+    ]
+
+    db = Database(database_url=f"sqlite:///{(tmp_path / 'itad.db').as_posix()}")
+    bot = DealHuntersBot(database=db, api_client=client, seed_on_start=False)
+    token, _ = bot.iniciar_sessao()
+
+    with (
+        patch.object(client._session, "get", return_value=mock_search),
+        patch.object(client._session, "post", return_value=mock_prices),
+    ):
+        resp = bot.responder("Quanto custa Hollow Knight?", token)
+
+    assert resp.origem_dados == "api_live"
+    assert "R$ 39,99" in resp.resposta
+    assert "R$ 46,99" in resp.resposta
+    assert "Nuuvem" in resp.resposta
+    assert "IsThereAnyDeal API (preço real em BRL — Brasil)" in resp.resposta
+    assert "US$" not in resp.resposta
+
+
+def test_itad_timeout_aciona_fallback_gracioso() -> None:
+    client = IsThereAnyDealClient(
+        api_key="chave-teste", offline_mode=False, max_retries=1
+    )
+    with patch.object(
+        client._session, "get", side_effect=requests.Timeout("Timeout ITAD")
+    ):
+        resultado = client.consultar_preco_jogo("Hollow Knight")
+
+    assert resultado.sucesso is True
+    assert resultado.origem == "cache_fallback"
+    assert resultado.erro_amigavel is not None
+    assert "IsThereAnyDeal" in resultado.erro_amigavel
+    assert len(resultado.dados["ofertas"]) >= 1

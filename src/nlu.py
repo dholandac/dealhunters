@@ -304,6 +304,7 @@ LOJAS_NER: Dict[str, str] = {
     "ubisoft": "Ubisoft Connect",
     "uplay": "Ubisoft Connect",
     "gamesplanet": "Gamesplanet",
+    "nuuvem": "Nuuvem",
 }
 
 TERMOS_NAO_JOGO = {

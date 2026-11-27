@@ -2,12 +2,12 @@
 Eixo 2 — Integração Sistêmica via API REST (requests).
 
 Consome em tempo real:
-1. CheapShark API v1.0 (https://www.cheapshark.com/api/1.0) — gratuita e sem API key:
-   - GET /stores : catálogo de lojas digitais
-   - GET /games?title=... : busca de jogos por título
-   - GET /games?id=...    : detalhes e ofertas de um jogo em múltiplas lojas + menor preço histórico
-   - GET /deals  : promoções filtradas por orçamento, loja e desconto
-2. AwesomeAPI (https://economia.awesomeapi.com.br/json/last/USD-BRL) — cotação USD->BRL em tempo real.
+1. IsThereAnyDeal (ITAD) API v2/v3 (https://api.isthereanydeal.com) — preços REAIS regionalizados em BRL (country=BR):
+   - GET  /service/shops/v1?country=BR : catálogo de lojas digitais no Brasil (Steam, Nuuvem, GOG, Epic, etc.)
+   - GET  /games/search/v1?title=...   : busca de jogos por título (retorna UUID ITAD)
+   - POST /games/prices/v3?country=BR  : preços reais em BRL em múltiplas lojas + menor preço histórico em BRL
+   - GET  /deals/v2?country=BR         : promoções ativas em BRL filtradas por loja e orçamento
+2. CheapShark API v1.0 + AwesomeAPI (mantidos como legado/opção secundária em USD->BRL).
 
 Inclui tratamento robusto de exceções (Timeout, ConnectionError, HTTPError, JSON inválido),
 retentativas com backoff leve e fallback automático para catálogo local em caso de queda de rede.
@@ -72,8 +72,8 @@ class ApiResult:
     sucesso: bool
     dados: Any = None
     origem: str = "api_live"  # api_live | cache_fallback | erro
-    cotacao_usd_brl: float = config.DEFAULT_USD_BRL_RATE
-    origem_cotacao: str = "fallback"
+    cotacao_usd_brl: Optional[float] = config.DEFAULT_USD_BRL_RATE
+    origem_cotacao: str = "fallback"  # brl_nativo | awesomeapi_live | fallback_padrao | fallback_offline
     erro_amigavel: Optional[str] = None
     detalhe_tecnico: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -659,3 +659,487 @@ class CheapSharkClient:
             ),
             detalhe_tecnico=detalhe_erro,
         )
+
+
+# ----------------------------------------------------------------------
+# IsThereAnyDeal (ITAD) API v2/v3 — Preços Reais Regionalizados em BRL
+# ----------------------------------------------------------------------
+
+ITAD_DEFAULT_SHOPS_MAP: Dict[int, str] = {
+    4: "Blizzard",
+    6: "Fanatical",
+    15: "DreamGame",
+    16: "Epic Games Store",
+    24: "GamersGate",
+    26: "GamesPlanet UK",
+    27: "GamesPlanet DE",
+    28: "GamesPlanet FR",
+    29: "GamesPlanet US",
+    35: "GOG",
+    36: "GreenManGaming",
+    37: "Humble Store",
+    50: "Nuuvem",
+    52: "EA Store",
+    61: "Steam",
+    62: "Ubisoft Store",
+}
+
+ITAD_STORE_NAME_ALIASES: Dict[str, List[int]] = {
+    "steam": [61],
+    "nuuvem": [50],
+    "gog": [35],
+    "epic": [16],
+    "epic games": [16],
+    "epic games store": [16],
+    "epic game store": [16],
+    "humble": [37],
+    "humble store": [37],
+    "humble bundle": [37],
+    "fanatical": [6],
+    "greenmangaming": [36],
+    "green man gaming": [36],
+    "gmg": [36],
+    "gamersgate": [24],
+    "ubisoft": [62],
+    "ubisoft connect": [62],
+    "ubisoft store": [62],
+    "uplay": [62],
+    "origin": [52],
+    "ea": [52],
+    "ea store": [52],
+    "origin / ea": [52],
+    "blizzard": [4],
+    "battle.net": [4],
+    "dreamgame": [15],
+    "gamesplanet": [26, 27, 28, 29],
+}
+
+
+class IsThereAnyDealClient:
+    """
+    Cliente REST para a API IsThereAnyDeal (v2/v3).
+    Retorna preços REAIS regionalizados em BRL (country=BR) sem conversão artificial.
+    Inclui fallback automático para o catálogo local em caso de queda de rede ou modo offline.
+    """
+
+    def __init__(
+        self,
+        api_key: str = config.ITAD_API_KEY,
+        base_url: str = config.ITAD_BASE_URL,
+        country: str = config.ITAD_COUNTRY,
+        timeout: float = config.API_TIMEOUT_SECONDS,
+        max_retries: int = config.API_MAX_RETRIES,
+        offline_mode: bool = config.OFFLINE_MODE,
+        fallback_catalog_path: Path = config.FALLBACK_CATALOG_PATH,
+    ) -> None:
+        self.api_key = (api_key or "").strip()
+        self.base_url = base_url.rstrip("/")
+        self.country = (country or "BR").strip().upper()
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.offline_mode = offline_mode
+        self.fallback_catalog_path = Path(fallback_catalog_path)
+
+        self._session = requests.Session()
+        self._session.headers.update(
+            {
+                "User-Agent": config.CHEAPSHARK_USER_AGENT,
+                "Accept": "application/json",
+            }
+        )
+        self._shops_cache: Dict[int, str] = dict(ITAD_DEFAULT_SHOPS_MAP)
+        self._shops_loaded_live: bool = False
+        self._fallback_helper = CheapSharkClient(
+            offline_mode=True,
+            fallback_catalog_path=self.fallback_catalog_path,
+        )
+
+    @staticmethod
+    def resolver_shop_ids(nome_loja: Optional[str]) -> Optional[List[int]]:
+        if not nome_loja:
+            return None
+        chave = nome_loja.strip().lower()
+        return ITAD_STORE_NAME_ALIASES.get(chave)
+
+    def _request_json(
+        self,
+        method: str,
+        endpoint: str,
+        params: Optional[Dict[str, Any]] = None,
+        json_body: Optional[Any] = None,
+    ) -> Tuple[Optional[Any], Optional[str]]:
+        if self.offline_mode:
+            return None, "Modo offline ativado por configuração."
+        if not self.api_key:
+            return None, "ITAD_API_KEY não configurada no ambiente (.env)."
+
+        url = f"{self.base_url}/{endpoint.lstrip('/')}"
+        req_params = dict(params or {})
+        req_params["key"] = self.api_key
+        ultimo_erro: Optional[str] = None
+
+        for tentativa in range(1, self.max_retries + 1):
+            try:
+                if method.upper() == "POST":
+                    resp = self._session.post(
+                        url,
+                        params=req_params,
+                        json=json_body,
+                        timeout=self.timeout,
+                    )
+                else:
+                    resp = self._session.get(
+                        url,
+                        params=req_params,
+                        timeout=self.timeout,
+                    )
+
+                if resp.status_code == 429:
+                    ultimo_erro = "Rate limit da IsThereAnyDeal atingido (HTTP 429)."
+                    if tentativa < self.max_retries:
+                        time.sleep(0.8 * tentativa)
+                        continue
+                    return None, ultimo_erro
+
+                resp.raise_for_status()
+                return resp.json(), None
+
+            except requests.Timeout:
+                ultimo_erro = f"Timeout após {self.timeout}s ao consultar {endpoint}."
+            except requests.ConnectionError:
+                ultimo_erro = "Falha de conexão de rede com a API IsThereAnyDeal."
+            except requests.HTTPError as exc:
+                status = exc.response.status_code if exc.response is not None else "?"
+                ultimo_erro = f"Erro HTTP {status} retornado pela API IsThereAnyDeal."
+                if isinstance(status, int) and 400 <= status < 500:
+                    break
+            except ValueError:
+                ultimo_erro = "Resposta JSON inválida recebida da API IsThereAnyDeal."
+                break
+
+            if tentativa < self.max_retries:
+                time.sleep(0.4 * tentativa)
+
+        return None, ultimo_erro
+
+    def carregar_lojas(self) -> Dict[int, str]:
+        if self._shops_loaded_live or self.offline_mode or not self.api_key:
+            return self._shops_cache
+
+        payload, erro = self._request_json(
+            "GET", "/service/shops/v1", params={"country": self.country}
+        )
+        if payload and isinstance(payload, list) and not erro:
+            for loja in payload:
+                sid = loja.get("id")
+                title = loja.get("title")
+                if isinstance(sid, int) and title:
+                    self._shops_cache[sid] = str(title)
+            self._shops_loaded_live = True
+        return self._shops_cache
+
+    @staticmethod
+    def _normalizar_oferta_brl(
+        *,
+        titulo: str,
+        deal_id: str,
+        store_name: str,
+        store_id: str,
+        sale_price_brl: float,
+        normal_price_brl: float,
+        savings_pct: float,
+        link: str,
+        cheapest_ever_brl: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        return {
+            "titulo": titulo,
+            "deal_id": deal_id,
+            "loja": store_name,
+            "store_id": store_id,
+            "preco_usd": None,
+            "preco_normal_usd": None,
+            "preco_brl": round(sale_price_brl, 2),
+            "preco_normal_brl": round(normal_price_brl, 2),
+            "desconto_pct": round(savings_pct, 1),
+            "metacritic": None,
+            "menor_preco_historico_usd": None,
+            "menor_preco_historico_brl": (
+                round(cheapest_ever_brl, 2) if cheapest_ever_brl is not None else None
+            ),
+            "link": link,
+        }
+
+    @staticmethod
+    def _escolher_melhor_jogo(
+        candidatos: List[Dict[str, Any]], titulo: str
+    ) -> Dict[str, Any]:
+        titulo_lower = titulo.strip().lower()
+        for c in candidatos:
+            if (
+                str(c.get("title", "")).strip().lower() == titulo_lower
+                and c.get("type") == "game"
+            ):
+                return c
+        for c in candidatos:
+            if str(c.get("title", "")).strip().lower() == titulo_lower:
+                return c
+        for c in candidatos:
+            if (
+                titulo_lower in str(c.get("title", "")).lower()
+                and c.get("type") == "game"
+            ):
+                return c
+        for c in candidatos:
+            if c.get("type") == "game":
+                return c
+        return candidatos[0]
+
+    def consultar_preco_jogo(
+        self,
+        titulo: str,
+        loja_filtro: Optional[str] = None,
+        limite_ofertas: int = 4,
+    ) -> ApiResult:
+        """
+        Busca o jogo na IsThereAnyDeal (GET /games/search/v1 -> POST /games/prices/v3?country=BR)
+        e retorna preços REAIS regionalizados em BRL.
+        """
+        shop_ids_filtro = self.resolver_shop_ids(loja_filtro)
+
+        search_payload, erro_search = self._request_json(
+            "GET", "/games/search/v1", params={"title": titulo, "results": 8}
+        )
+
+        if erro_search is None and isinstance(search_payload, list):
+            if not search_payload:
+                return ApiResult(
+                    sucesso=True,
+                    dados={"jogo": titulo, "ofertas": []},
+                    origem="api_live",
+                    cotacao_usd_brl=None,
+                    origem_cotacao="brl_nativo",
+                )
+
+            melhor_jogo = self._escolher_melhor_jogo(search_payload, titulo)
+            game_id = str(melhor_jogo.get("id", ""))
+            nome_oficial = str(melhor_jogo.get("title") or titulo)
+
+            price_params: Dict[str, Any] = {
+                "country": self.country,
+                "vouchers": "true",
+            }
+            if shop_ids_filtro:
+                price_params["shops"] = ",".join(str(sid) for sid in shop_ids_filtro)
+
+            prices_payload, erro_prices = self._request_json(
+                "POST",
+                "/games/prices/v3",
+                params=price_params,
+                json_body=[game_id],
+            )
+
+            if erro_prices is None and isinstance(prices_payload, list):
+                item_jogo: Dict[str, Any] = {}
+                for entry in prices_payload:
+                    if str(entry.get("id", "")) == game_id:
+                        item_jogo = entry
+                        break
+                if not item_jogo and prices_payload:
+                    item_jogo = prices_payload[0]
+
+                history_low = item_jogo.get("historyLow") or {}
+                low_all = history_low.get("all") or {}
+                cheapest_ever_brl: Optional[float] = None
+                if low_all.get("amount") is not None:
+                    try:
+                        cheapest_ever_brl = float(low_all["amount"])
+                    except (TypeError, ValueError):
+                        cheapest_ever_brl = None
+
+                ofertas: List[Dict[str, Any]] = []
+                for deal in item_jogo.get("deals", []):
+                    shop = deal.get("shop") or {}
+                    price_obj = deal.get("price") or {}
+                    regular_obj = deal.get("regular") or price_obj
+                    if price_obj.get("amount") is None:
+                        continue
+                    try:
+                        sale_brl = float(price_obj["amount"])
+                        regular_brl = float(regular_obj.get("amount", sale_brl))
+                        cut = float(deal.get("cut") or 0.0)
+                    except (TypeError, ValueError):
+                        continue
+
+                    sid = str(shop.get("id", ""))
+                    shop_name = str(shop.get("name") or f"Loja #{sid}")
+                    deal_url = str(deal.get("url") or "")
+
+                    ofertas.append(
+                        self._normalizar_oferta_brl(
+                            titulo=nome_oficial,
+                            deal_id=f"itad-{game_id}-{sid}",
+                            store_name=shop_name,
+                            store_id=sid,
+                            sale_price_brl=sale_brl,
+                            normal_price_brl=regular_brl,
+                            savings_pct=cut,
+                            link=deal_url,
+                            cheapest_ever_brl=cheapest_ever_brl,
+                        )
+                    )
+
+                ofertas.sort(key=lambda item: item["preco_brl"])
+                return ApiResult(
+                    sucesso=True,
+                    dados={
+                        "jogo": nome_oficial,
+                        "game_id": game_id,
+                        "menor_preco_historico_usd": None,
+                        "menor_preco_historico_brl": (
+                            round(cheapest_ever_brl, 2)
+                            if cheapest_ever_brl is not None
+                            else None
+                        ),
+                        "ofertas": ofertas[:limite_ofertas],
+                    },
+                    origem="api_live",
+                    cotacao_usd_brl=None,
+                    origem_cotacao="brl_nativo",
+                )
+
+            erro_final = erro_prices
+        else:
+            erro_final = erro_search
+
+        # Contingência automática (catálogo local) em caso de falha de rede/API
+        fallback_res = self._fallback_helper.consultar_preco_jogo(
+            titulo=titulo,
+            loja_filtro=loja_filtro,
+            limite_ofertas=limite_ofertas,
+        )
+        fallback_res.detalhe_tecnico = erro_final
+        if not self.offline_mode and fallback_res.sucesso:
+            fallback_res.erro_amigavel = (
+                "Aviso de contingência: a API IsThereAnyDeal está instável no momento; "
+                "exibindo preços de referência do cache local."
+            )
+        return fallback_res
+
+    def buscar_promocoes(
+        self,
+        preco_max_brl: Optional[float] = None,
+        loja_filtro: Optional[str] = None,
+        titulo_filtro: Optional[str] = None,
+        limite: int = 5,
+    ) -> ApiResult:
+        """
+        Consulta promoções ativas em BRL real via GET /deals/v2?country=BR
+        com filtros opcionais de orçamento em reais e loja específica.
+        """
+        if titulo_filtro:
+            res_jogo = self.consultar_preco_jogo(
+                titulo=titulo_filtro,
+                loja_filtro=loja_filtro,
+                limite_ofertas=max(limite, 5),
+            )
+            if res_jogo.sucesso and res_jogo.origem == "api_live":
+                ofertas_filtradas = (res_jogo.dados or {}).get("ofertas", [])
+                if preco_max_brl is not None and preco_max_brl > 0:
+                    ofertas_filtradas = [
+                        o for o in ofertas_filtradas if o["preco_brl"] <= preco_max_brl
+                    ]
+                return ApiResult(
+                    sucesso=True,
+                    dados={
+                        "ofertas": ofertas_filtradas[:limite],
+                        "filtro_preco_max_brl": preco_max_brl,
+                        "filtro_loja": loja_filtro,
+                    },
+                    origem="api_live",
+                    cotacao_usd_brl=None,
+                    origem_cotacao="brl_nativo",
+                )
+
+        shop_ids_filtro = self.resolver_shop_ids(loja_filtro)
+        params: Dict[str, Any] = {
+            "country": self.country,
+            "limit": 60,
+            "sort": "-hot",
+            "nondeals": "false",
+        }
+        if shop_ids_filtro:
+            params["shops"] = ",".join(str(sid) for sid in shop_ids_filtro)
+
+        payload, erro = self._request_json("GET", "/deals/v2", params=params)
+        if erro is None and isinstance(payload, dict):
+            itens = payload.get("list") or []
+            ofertas_jogos: List[Dict[str, Any]] = []
+            ofertas_outros: List[Dict[str, Any]] = []
+
+            for entry in itens:
+                deal = entry.get("deal") or {}
+                shop = deal.get("shop") or {}
+                price_obj = deal.get("price") or {}
+                regular_obj = deal.get("regular") or price_obj
+                if price_obj.get("amount") is None:
+                    continue
+                try:
+                    sale_brl = float(price_obj["amount"])
+                    regular_brl = float(regular_obj.get("amount", sale_brl))
+                    cut = float(deal.get("cut") or 0.0)
+                except (TypeError, ValueError):
+                    continue
+
+                if preco_max_brl is not None and preco_max_brl > 0 and sale_brl > preco_max_brl:
+                    continue
+
+                sid = str(shop.get("id", ""))
+                shop_name = str(shop.get("name") or f"Loja #{sid}")
+                oferta = self._normalizar_oferta_brl(
+                    titulo=str(entry.get("title") or "Jogo sem título"),
+                    deal_id=f"itad-{entry.get('id', '')}-{sid}",
+                    store_name=shop_name,
+                    store_id=sid,
+                    sale_price_brl=sale_brl,
+                    normal_price_brl=regular_brl,
+                    savings_pct=cut,
+                    link=str(deal.get("url") or ""),
+                )
+                if entry.get("type") == "game":
+                    ofertas_jogos.append(oferta)
+                else:
+                    ofertas_outros.append(oferta)
+
+            ofertas = (ofertas_jogos + ofertas_outros)[:limite]
+            return ApiResult(
+                sucesso=True,
+                dados={
+                    "ofertas": ofertas,
+                    "filtro_preco_max_brl": preco_max_brl,
+                    "filtro_loja": loja_filtro,
+                },
+                origem="api_live",
+                cotacao_usd_brl=None,
+                origem_cotacao="brl_nativo",
+            )
+
+        fallback_res = self._fallback_helper.buscar_promocoes(
+            preco_max_brl=preco_max_brl,
+            loja_filtro=loja_filtro,
+            titulo_filtro=titulo_filtro,
+            limite=limite,
+        )
+        fallback_res.detalhe_tecnico = erro
+        if not self.offline_mode and fallback_res.sucesso:
+            fallback_res.erro_amigavel = (
+                "Aviso de contingência: a API IsThereAnyDeal está instável no momento; "
+                "exibindo promoções de referência do cache local."
+            )
+        return fallback_res
+
+
+def criar_api_client(offline_mode: bool = config.OFFLINE_MODE) -> Any:
+    """Fábrica padrão: usa IsThereAnyDeal (BRL real) quando ITAD_API_KEY estiver configurada."""
+    if config.ITAD_API_KEY:
+        return IsThereAnyDealClient(offline_mode=offline_mode)
+    return CheapSharkClient(offline_mode=offline_mode)

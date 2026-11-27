@@ -48,7 +48,7 @@ class BusinessLogic:
     def __init__(
         self,
         database: Database,
-        api_client: CheapSharkClient,
+        api_client: Any,
         nlg: NLG,
         max_fallbacks: int = config.MAX_CONSECUTIVE_FALLBACKS,
     ) -> None:

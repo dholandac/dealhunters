@@ -105,29 +105,38 @@ class NLG:
         for idx, oferta in enumerate(ofertas, start=1):
             desconto = oferta.get("desconto_pct", 0.0)
             tag_desc = f" (-{desconto:.0f}%)" if desconto >= 1.0 else ""
+            preco_usd = oferta.get("preco_usd")
+            usd_info = f" ({fmt_usd(preco_usd)})" if preco_usd is not None else ""
             linhas.append(
-                f"  [{idx}] {oferta['loja']}: {fmt_brl(oferta['preco_brl'])} "
-                f"({fmt_usd(oferta['preco_usd'])}){tag_desc}"
+                f"  [{idx}] {oferta['loja']}: {fmt_brl(oferta['preco_brl'])}"
+                f"{usd_info}{tag_desc}"
             )
 
         menor_brl = dados.get("menor_preco_historico_brl")
         menor_usd = dados.get("menor_preco_historico_usd")
-        if menor_brl is not None and menor_usd is not None:
+        if menor_brl is not None:
+            menor_usd_info = f" ({fmt_usd(menor_usd)})" if menor_usd is not None else ""
             linhas.append(
-                f"\nMenor preço histórico registrado: {fmt_brl(menor_brl)} ({fmt_usd(menor_usd)})."
+                f"\nMenor preço histórico registrado: {fmt_brl(menor_brl)}{menor_usd_info}."
             )
 
-        fonte_label = (
-            "CheapShark API (tempo real)"
-            if origem == "api_live"
-            else "Catálogo local de contingência"
-        )
-        cotacao_label = (
-            "tempo real" if origem_cotacao == "awesomeapi_live" else "referência"
-        )
-        linhas.append(
-            f"Fonte: {fonte_label} | Câmbio USD->BRL ({cotacao_label}): R$ {cotacao:.2f}."
-        )
+        if origem == "api_live" and origem_cotacao == "brl_nativo":
+            linhas.append(
+                "Fonte: IsThereAnyDeal API (preço real em BRL — Brasil)."
+            )
+        else:
+            fonte_label = (
+                "CheapShark API (tempo real)"
+                if origem == "api_live"
+                else "Catálogo local de contingência"
+            )
+            cotacao_label = (
+                "tempo real" if origem_cotacao == "awesomeapi_live" else "referência"
+            )
+            taxa_val = cotacao if cotacao is not None else config.DEFAULT_USD_BRL_RATE
+            linhas.append(
+                f"Fonte: {fonte_label} | Câmbio USD->BRL ({cotacao_label}): R$ {taxa_val:.2f}."
+            )
         linhas.append(
             "\nPróximo passo: digite o número da opção (ex.: 'opção 1') para ver o link "
             "da oferta, filtre por loja (ex.: 'só na Steam') ou peça um alerta de preço."
@@ -177,33 +186,50 @@ class NLG:
         for idx, oferta in enumerate(ofertas, start=1):
             desconto = oferta.get("desconto_pct", 0.0)
             meta = f" | Metacritic {oferta['metacritic']}" if oferta.get("metacritic") else ""
+            preco_usd = oferta.get("preco_usd")
+            if preco_usd is not None:
+                detalhe_preco = f" ({fmt_usd(preco_usd)}, -{desconto:.0f}%)"
+            else:
+                detalhe_preco = f" (-{desconto:.0f}%)" if desconto >= 1.0 else ""
             linhas.append(
-                f"  [{idx}] {oferta['titulo']} — {fmt_brl(oferta['preco_brl'])} "
-                f"({fmt_usd(oferta['preco_usd'])}, -{desconto:.0f}%) na {oferta['loja']}{meta}"
+                f"  [{idx}] {oferta['titulo']} — {fmt_brl(oferta['preco_brl'])}"
+                f"{detalhe_preco} na {oferta['loja']}{meta}"
             )
 
-        fonte_label = (
-            "CheapShark API (tempo real)"
-            if origem == "api_live"
-            else "Catálogo local de contingência"
-        )
-        cotacao_label = (
-            "tempo real" if origem_cotacao == "awesomeapi_live" else "referência"
-        )
-        linhas.append(
-            f"\nFonte: {fonte_label} | Câmbio USD->BRL ({cotacao_label}): R$ {cotacao:.2f}."
-        )
+        if origem == "api_live" and origem_cotacao == "brl_nativo":
+            linhas.append(
+                "\nFonte: IsThereAnyDeal API (preço real em BRL — Brasil)."
+            )
+        else:
+            fonte_label = (
+                "CheapShark API (tempo real)"
+                if origem == "api_live"
+                else "Catálogo local de contingência"
+            )
+            cotacao_label = (
+                "tempo real" if origem_cotacao == "awesomeapi_live" else "referência"
+            )
+            taxa_val = cotacao if cotacao is not None else config.DEFAULT_USD_BRL_RATE
+            linhas.append(
+                f"\nFonte: {fonte_label} | Câmbio USD->BRL ({cotacao_label}): R$ {taxa_val:.2f}."
+            )
         linhas.append(
             "Digite o número de uma opção (ex.: 'opção 2') para ver detalhes e link oficial."
         )
         return "\n".join(linhas)
 
     def detalhe_oferta(self, oferta: Dict[str, Any], indice: int) -> str:
+        preco_usd = oferta.get("preco_usd")
+        preco_normal_usd = oferta.get("preco_normal_usd")
+        usd_promo = f" ({fmt_usd(preco_usd)})" if preco_usd is not None else ""
+        usd_normal = (
+            f" ({fmt_usd(preco_normal_usd)})" if preco_normal_usd is not None else ""
+        )
         linhas = [
             f"Detalhes da opção [{indice}] — {oferta['titulo']}:",
             f"  - Loja parceira: {oferta['loja']}",
-            f"  - Preço promocional: {fmt_brl(oferta['preco_brl'])} ({fmt_usd(oferta['preco_usd'])})",
-            f"  - Preço original: {fmt_brl(oferta['preco_normal_brl'])} ({fmt_usd(oferta['preco_normal_usd'])})",
+            f"  - Preço promocional: {fmt_brl(oferta['preco_brl'])}{usd_promo}",
+            f"  - Preço original: {fmt_brl(oferta['preco_normal_brl'])}{usd_normal}",
             f"  - Economia: {oferta.get('desconto_pct', 0.0):.1f}%",
         ]
         if oferta.get("metacritic"):

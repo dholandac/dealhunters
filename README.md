@@ -4,7 +4,7 @@ Projeto prático desenvolvido em **Python** com **Arquitetura Modular Desacoplad
 
 O **Hunter**, assistente virtual oficial da loja de jogos digitais **Deal Hunters**, combina:
 - **Eixo 1 — NLU/NLP (`spaCy` + suporte `NLTK`):** normalização de gírias/ruídos ortográficos, tokenização, remoção seletiva de stopwords, lematização, classificação de intenções via TF-IDF + Cosseno, NER híbrido (`EntityRuler` + extração dinâmica) e detecção de sentimento/urgência.
-- **Eixo 2 — API REST (`requests`):** integração gratuita em tempo real com a **CheapShark API v1.0** (`/stores`, `/games`, `/deals`) e **AwesomeAPI** (`USD→BRL`), com retries, tratamento de exceções e fallback local de contingência.
+- **Eixo 2 — API REST (`requests`):** integração em tempo real com a **IsThereAnyDeal API v2/v3** (`/service/shops/v1`, `/games/search/v1`, `/games/prices/v3`, `/deals/v2`) retornando **preços reais regionalizados em `BRL` (`country=BR`)** em múltiplas lojas (Steam, Nuuvem, GOG, Epic Games, GreenManGaming, etc.), com suporte secundário a **CheapShark + AwesomeAPI** quando `ITAD_API_KEY` não está configurada, além de retries, tratamento de exceções e fallback local de contingência.
 - **Eixo 3 — Persistência Relacional e Estado (`SQLAlchemy` + `SQLite`):** controle **Stateful** em `SessaoUsuario`, auditoria com conformidade **LGPD** em `ConversaLog` (mascaramento automático de CPF/e-mail e anonimização sob demanda), além de `PedidoDigital` (validação por hash SHA-256), `AlertaPreco` e `TransbordoHumano`.
 - **Eixo 4 — Regras de Negócio, Fallback e Transbordo Humano:** máquina de estados multi-turno, transbordo automático após **2 falhas consecutivas** ou **extrema insatisfação/urgência**, com protocolo gravado em banco de dados.
 
@@ -24,7 +24,7 @@ dealhunters/
 │   └── fallback_catalog.json    # Catálogo local de contingência caso a API externa caia
 ├── src/
 │   ├── database.py              # Classe Database + ORM SQLAlchemy + LGPD
-│   ├── api_client.py            # Classes CheapSharkClient e ExchangeRateClient (requests)
+│   ├── api_client.py            # Classes IsThereAnyDealClient (BRL real), CheapSharkClient e ExchangeRateClient
 │   ├── nlu.py                   # Classe NLU (spaCy, EntityRuler, NLTK, TF-IDF, Sentimento)
 │   ├── business_logic.py        # Classe BusinessLogic (Máquina de Estados e Transbordo)
 │   ├── nlg.py                   # Classe NLG (Persona Hunter)
@@ -53,14 +53,18 @@ pip install -r requirements.txt
 python -m spacy download pt_core_news_sm
 python -c "import nltk; nltk.download('stopwords'); nltk.download('rslp')"
 
-# 5. Crie e pré-popule o banco SQLite (dealhunters.db)
+# 5. Configure a API Key da IsThereAnyDeal no arquivo .env (preços reais em BRL)
+Copy-Item .env.example .env
+# Edite o .env e preencha: ITAD_API_KEY=<sua_chave_gratuita_do_isthereanydeal>
+
+# 6. Crie e pré-popule o banco SQLite (dealhunters.db)
 python data/seed_data.py
 ```
 
 ### Executar no Terminal (Live Demo obrigatória)
 
 ```powershell
-# Modo normal (API CheapShark em tempo real)
+# Modo normal (API IsThereAnyDeal em tempo real — preços reais em BRL)
 python main.py
 
 # Modo demonstração técnica (mostra lemas, NER, intenção, estado e origem da API)

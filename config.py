@@ -29,6 +29,12 @@ DEFAULT_DB_PATH = BASE_DIR / "dealhunters.db"
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH.as_posix()}")
 
 # APIs REST externas (Eixo 2: requests)
+# 1) IsThereAnyDeal (ITAD) — preços reais regionalizados em BRL (country=BR)
+ITAD_API_KEY = os.getenv("ITAD_API_KEY", "").strip()
+ITAD_BASE_URL = os.getenv("ITAD_BASE_URL", "https://api.isthereanydeal.com")
+ITAD_COUNTRY = os.getenv("ITAD_COUNTRY", "BR").strip().upper() or "BR"
+
+# 2) CheapShark (legado/contingência em USD)
 CHEAPSHARK_BASE_URL = os.getenv(
     "CHEAPSHARK_BASE_URL", "https://www.cheapshark.com/api/1.0"
 )
